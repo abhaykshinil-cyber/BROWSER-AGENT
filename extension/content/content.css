@@ -1,0 +1,61 @@
+/*
+ * BrowserAgent — Content Script Styles
+ *
+ * Minimal overlay styles injected into every page.
+ * Kept deliberately small to avoid interfering with host-page layout.
+ */
+
+/* Highlight ring shown when the agent selects / targets an element. */
+[data-browseragent-highlight] {
+  outline: 3px solid #6366f1 !important;
+  outline-offset: 2px !important;
+  transition: outline-color 0.2s ease;
+}
+
+[data-browseragent-highlight="success"] {
+  outline-color: #22c55e !important;
+}
+
+[data-browseragent-highlight="error"] {
+  outline-color: #ef4444 !important;
+}
+
+/* Tooltip that appears next to the targeted element. */
+.browseragent-tooltip {
+  position: fixed;
+  z-index: 2147483647;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: rgba(30, 27, 75, 0.92);
+  color: #e0e7ff;
+  font: 500 12px/1.4 "Inter", "Segoe UI", system-ui, sans-serif;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  max-width: 280px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.browseragent-tooltip.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Execution progress indicator — subtle bar at top of viewport. */
+.browseragent-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #6366f1, #a78bfa, #6366f1);
+  background-size: 200% 100%;
+  z-index: 2147483647;
+  transition: width 0.3s ease;
+  animation: browseragent-shimmer 1.5s infinite linear;
+}
+
+@keyframes browseragent-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

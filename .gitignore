@@ -1,0 +1,48 @@
+# Environment variables — NEVER commit API keys
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.egg
+.Python
+venv/
+env/
+.venv/
+pip-wheel-metadata/
+
+# Database & vector store
+*.db
+*.sqlite
+*.sqlite3
+agent-server/database/
+database/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node (if any frontend tooling added later)
+node_modules/
+npm-debug.log*
+
+# Extension build artifacts
+extension/dist/

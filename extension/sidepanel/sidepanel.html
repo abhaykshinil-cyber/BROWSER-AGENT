@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BrowserAgent</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- ═══ HEADER ═══ -->
+    <header id="header">
+      <div class="header-left">
+        <svg class="logo-svg" width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M11 1L2 6V16L11 21L20 16V6L11 1Z" stroke="#4f98a3" stroke-width="1.4" fill="none"/>
+          <circle cx="11" cy="11" r="3" fill="#4f98a3"/>
+          <line x1="11" y1="1" x2="11" y2="8" stroke="#4f98a3" stroke-width="1.2"/>
+          <line x1="11" y1="14" x2="11" y2="21" stroke="#4f98a3" stroke-width="1.2"/>
+          <line x1="2" y1="6" x2="8" y2="9.5" stroke="#4f98a3" stroke-width="1.2"/>
+          <line x1="14" y1="12.5" x2="20" y2="16" stroke="#4f98a3" stroke-width="1.2"/>
+          <line x1="20" y1="6" x2="14" y2="9.5" stroke="#4f98a3" stroke-width="1.2"/>
+          <line x1="8" y1="12.5" x2="2" y2="16" stroke="#4f98a3" stroke-width="1.2"/>
+        </svg>
+        <span class="logo-title">Browser Agent</span>
+      </div>
+      <div class="header-right">
+        <div id="conn-badge" class="conn-badge offline">
+          <span class="conn-dot"></span>
+          <span id="conn-label">Offline</span>
+        </div>
+        <button id="settings-toggle" class="icon-btn" title="Settings" aria-label="Toggle settings">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M6.5.5A.5.5 0 017 0h2a.5.5 0 01.5.5v1.293a5.5 5.5 0 011.542.636l.914-.915a.5.5 0 01.708 0l1.414 1.414a.5.5 0 010 .708l-.914.914A5.5 5.5 0 0113.8 6.1H15.5a.5.5 0 01.5.5v2a.5.5 0 01-.5.5h-1.293a5.5 5.5 0 01-.636 1.542l.914.914a.5.5 0 010 .708l-1.414 1.414a.5.5 0 01-.708 0l-.914-.914a5.5 5.5 0 01-1.542.636V15.5a.5.5 0 01-.5.5H7a.5.5 0 01-.5-.5v-1.293a5.5 5.5 0 01-1.542-.636l-.914.914a.5.5 0 01-.708 0L1.922 13.07a.5.5 0 010-.708l.914-.914A5.5 5.5 0 012.2 9.9H.5a.5.5 0 01-.5-.5v-2a.5.5 0 01.5-.5h1.293a5.5 5.5 0 01.636-1.542l-.914-.914a.5.5 0 010-.708L2.93 2.322a.5.5 0 01.708 0l.914.914A5.5 5.5 0 016.1 2.6V.5zM8 5a3 3 0 100 6 3 3 0 000-6z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- ═══ SETTINGS DRAWER ═══ -->
+    <div id="settings-drawer" class="settings-drawer">
+      <div class="settings-inner">
+        <div class="setting-row">
+          <label for="set-api-key" class="setting-label">API Key</label>
+          <input id="set-api-key" type="password" class="setting-input" placeholder="sk-ant-api03-…">
+        </div>
+        <div class="setting-row">
+          <label for="set-model" class="setting-label">Model</label>
+          <select id="set-model" class="setting-input">
+            <option value="claude-opus-4-5">claude-opus-4-5</option>
+            <option value="claude-sonnet-4-5">claude-sonnet-4-5</option>
+            <option value="claude-haiku-3-5">claude-haiku-3-5</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <label for="set-delay" class="setting-label">Action Delay: <span id="delay-value">800</span>ms</label>
+          <input id="set-delay" type="range" class="setting-range" min="200" max="2000" step="100" value="800">
+        </div>
+        <div class="setting-row">
+          <label class="setting-toggle-label">
+            <input id="set-preview" type="checkbox" checked>
+            <span>Preview mode (show plan before executing)</span>
+          </label>
+        </div>
+        <div class="setting-row">
+          <label for="set-backend" class="setting-label">Backend URL</label>
+          <input id="set-backend" type="text" class="setting-input" value="http://localhost:8765">
+        </div>
+        <button id="save-settings-btn" class="btn btn-primary btn-sm">Save Settings</button>
+      </div>
+    </div>
+
+    <!-- ═══ TAB BAR ═══ -->
+    <nav id="tab-bar" role="tablist">
+      <button class="tab-btn active" data-tab="agent" role="tab" aria-selected="true">Agent</button>
+      <button class="tab-btn" data-tab="mcq" role="tab" aria-selected="false">MCQ</button>
+      <button class="tab-btn" data-tab="teach" role="tab" aria-selected="false">Teach</button>
+      <button class="tab-btn" data-tab="memory" role="tab" aria-selected="false">Memory</button>
+      <button class="tab-btn" data-tab="log" role="tab" aria-selected="false">Log</button>
+    </nav>
+
+    <!-- ═══ STATUS BAR ═══ -->
+    <div id="status-bar" class="status-bar">
+      <span id="status-dot" class="status-dot idle"></span>
+      <span id="status-text">Idle</span>
+      <span id="step-counter" class="step-counter hidden"></span>
+    </div>
+
+    <!-- ═══ TAB CONTENT ═══ -->
+    <div id="tab-content" class="tab-content">
+
+      <!-- ── AGENT TAB ── -->
+      <div id="panel-agent" class="tab-panel active" role="tabpanel">
+        <div class="prompt-group">
+          <textarea id="prompt-input" class="prompt-textarea" placeholder="Tell the agent what to do…" rows="3"></textarea>
+          <p class="prompt-hint">Tip: Be specific — mention the task, site type, or provide topic context</p>
+        </div>
+
+        <div class="action-row">
+          <button id="btn-scan" class="btn btn-ghost btn-sm">🔍 Scan Page</button>
+          <button id="btn-run" class="btn btn-primary btn-sm" disabled>▶ Run Agent</button>
+          <button id="btn-pause" class="btn btn-ghost btn-sm" disabled>⏸ Pause</button>
+          <button id="btn-stop" class="btn btn-danger btn-sm" disabled>⏹ Stop</button>
+        </div>
+
+        <!-- Open Tabs (Phase 9) -->
+        <div id="tabs-panel-container"></div>
+
+        <!-- Confirm Section -->
+        <div id="confirm-section" class="confirm-section hidden">
+          <div class="confirm-banner">
+            <span class="confirm-icon">📋</span>
+            <span>Agent has a plan. Review and confirm.</span>
+          </div>
+          <div class="confirm-actions">
+            <button id="btn-confirm" class="btn btn-primary btn-sm">✓ Confirm</button>
+            <button id="btn-cancel-plan" class="btn btn-ghost btn-sm">✕ Cancel</button>
+          </div>
+        </div>
+
+        <!-- Progress -->
+        <div id="progress-wrap" class="progress-wrap hidden">
+          <div class="progress-track"><div id="progress-fill" class="progress-fill"></div></div>
+        </div>
+
+        <!-- Active Task -->
+        <div id="active-task" class="active-task hidden">
+          <span class="active-task-label">Current goal:</span>
+          <p id="active-task-text" class="active-task-text"></p>
+        </div>
+
+        <!-- Step Log -->
+        <div id="agent-log" class="step-log"></div>
+      </div>
+
+      <!-- ── MCQ TAB ── -->
+      <div id="panel-mcq" class="tab-panel" role="tabpanel">
+        <div class="mcq-header">
+          <div id="mcq-summary" class="mcq-summary">No questions detected</div>
+          <button id="btn-answer-all" class="btn btn-primary btn-sm" disabled>🤖 Answer All with AI</button>
+        </div>
+        <div id="mcq-questions" class="mcq-questions"></div>
+      </div>
+
+      <!-- ── TEACH TAB ── -->
+      <div id="panel-teach" class="tab-panel" role="tabpanel">
+        <div id="teach-panel-container"></div>
+      </div>
+
+      <!-- ── MEMORY TAB ── -->
+      <div id="panel-memory" class="tab-panel" role="tabpanel">
+        <div id="memory-panel-container"></div>
+      </div>
+
+      <!-- ── LOG TAB ── -->
+      <div id="panel-log" class="tab-panel" role="tabpanel">
+        <div class="log-header">
+          <button id="btn-export-log" class="btn btn-ghost btn-sm">⬇ Export</button>
+          <button id="btn-clear-log" class="btn btn-ghost btn-sm">✕ Clear</button>
+        </div>
+        <div id="log-container" class="log-container"></div>
+      </div>
+
+    </div><!-- /tab-content -->
+
+    <!-- ═══ FOOTER ═══ -->
+    <footer id="footer">BrowserAgent v1.0 — Phase 10</footer>
+
+    <!-- ═══ TOAST CONTAINER ═══ -->
+    <div id="toast-container"></div>
+
+  </div><!-- /app -->
+
+  <script src="sidepanel.js" type="module"></script>
+</body>
+</html>

@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BrowserAgent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header id="header">
+      <div class="header-brand">
+        <div class="logo-icon" aria-hidden="true">⚡</div>
+        <h1 class="logo-text">BrowserAgent</h1>
+      </div>
+      <div id="connection-status" class="status-badge disconnected">
+        <span class="status-dot"></span>
+        <span class="status-label">Offline</span>
+      </div>
+    </header>
+
+    <!-- Tab Navigation -->
+    <nav id="tab-nav" role="tablist">
+      <button class="tab active" data-tab="task" role="tab" aria-selected="true" id="tab-btn-task">Task</button>
+      <button class="tab" data-tab="memory" role="tab" aria-selected="false" id="tab-btn-memory">Memory</button>
+      <button class="tab" data-tab="teach" role="tab" aria-selected="false" id="tab-btn-teach">Teach</button>
+    </nav>
+
+    <!-- Task Panel -->
+    <section id="panel-task" class="panel active" role="tabpanel" aria-labelledby="tab-btn-task">
+      <div class="input-group">
+        <label for="task-input" class="input-label">What should I do?</label>
+        <textarea
+          id="task-input"
+          class="task-textarea"
+          placeholder="e.g. Search for 'BrowserAgent' on GitHub and star the first result"
+          rows="3"
+        ></textarea>
+      </div>
+
+      <div class="input-row">
+        <label class="toggle-label" for="confirm-toggle">
+          <input type="checkbox" id="confirm-toggle" checked>
+          <span>Confirm actions</span>
+        </label>
+        <button id="start-btn" class="btn btn-primary" disabled>
+          <span class="btn-icon">▶</span> Start
+        </button>
+      </div>
+
+      <!-- Progress -->
+      <div id="progress-section" class="progress-section hidden">
+        <div class="progress-header">
+          <span id="progress-label" class="progress-label">Preparing…</span>
+          <div class="progress-actions">
+            <button id="pause-btn" class="btn btn-ghost btn-sm" title="Pause execution">⏸ Pause</button>
+            <button id="resume-btn" class="btn btn-ghost btn-sm hidden" title="Resume execution">▶ Resume</button>
+            <button id="cancel-btn" class="btn btn-ghost btn-sm" title="Stop execution">✕ Stop</button>
+          </div>
+        </div>
+        <div class="progress-bar-track">
+          <div id="progress-bar" class="progress-bar-fill"></div>
+        </div>
+
+        <!-- Confirmation Gate -->
+        <div id="confirmation-gate" class="confirmation-gate hidden">
+          <p class="confirmation-text">Plan requires your approval before executing.</p>
+          <div class="confirmation-actions">
+            <button id="confirm-btn" class="btn btn-primary btn-sm hidden">✓ Approve & Run</button>
+            <button id="reject-btn" class="btn btn-ghost btn-sm hidden">✕ Reject</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step Log -->
+      <div id="step-log" class="step-log"></div>
+    </section>
+
+    <!-- Memory Panel -->
+    <section id="panel-memory" class="panel" role="tabpanel" aria-labelledby="tab-btn-memory">
+      <div class="panel-header">
+        <h2 class="panel-title">Stored Memories</h2>
+        <button id="refresh-memories" class="btn btn-ghost btn-sm">Refresh</button>
+      </div>
+      <div id="memory-list" class="memory-list">
+        <p class="empty-state">No memories yet. Teach the agent or complete some tasks.</p>
+      </div>
+    </section>
+
+    <!-- Teach Panel -->
+    <section id="panel-teach" class="panel" role="tabpanel" aria-labelledby="tab-btn-teach">
+      <div class="input-group">
+        <label for="teach-input" class="input-label">Teach the agent a rule</label>
+        <textarea
+          id="teach-input"
+          class="task-textarea"
+          placeholder="e.g. On GitHub, always use Ctrl+K to open the search bar instead of clicking"
+          rows="3"
+        ></textarea>
+      </div>
+
+      <div class="input-group">
+        <label for="teach-domain" class="input-label">Domain (optional)</label>
+        <input
+          type="text"
+          id="teach-domain"
+          class="text-input"
+          placeholder="e.g. github.com"
+        >
+      </div>
+
+      <div class="input-group">
+        <label for="teach-priority" class="input-label">Priority</label>
+        <input
+          type="range"
+          id="teach-priority"
+          class="range-input"
+          min="1"
+          max="10"
+          value="5"
+        >
+        <div class="range-labels">
+          <span>Low</span>
+          <span id="priority-value">5</span>
+          <span>Critical</span>
+        </div>
+      </div>
+
+      <button id="teach-btn" class="btn btn-primary" disabled>
+        <span class="btn-icon">💡</span> Save Teaching
+      </button>
+    </section>
+  </div>
+
+  <script src="sidepanel.js" type="module"></script>
+</body>
+</html>
