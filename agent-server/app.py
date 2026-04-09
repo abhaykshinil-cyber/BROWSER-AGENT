@@ -24,6 +24,15 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import uuid4
 
+# ── Load .env BEFORE importing config so env vars are available ───────
+# This must run whether the app is launched via `uvicorn app:app` or
+# `python app.py` — the __main__ block is never reached by uvicorn.
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv optional; set vars in the shell instead
+
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
