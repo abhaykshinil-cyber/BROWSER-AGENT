@@ -607,9 +607,15 @@
           var qText = findQuestionText(grp[0]) || host.getAttribute("aria-label") || "";
           var opts = [];
           for (var j = 0; j < grp.length; j++) {
+            // Shadow DOM: generate a selector the browser can actually use.
+            // ">>>" is not valid for document.querySelector; use the element's
+            // own id if available, otherwise fall back to the shadow host selector.
+            var shadowInputSel = grp[j].id
+              ? "#" + grp[j].id
+              : genSel(host);
             opts.push(makeOption(
               findLabel(grp[j]),
-              genSel(host) + " >>> " + (grp[j].id ? "#" + grp[j].id : "input[value='" + grp[j].value + "']"),
+              shadowInputSel,
               grp[j].value,
               grp[j].checked,
               "radio"
@@ -654,7 +660,8 @@
         for (var gn in groups) {
           var grp = groups[gn];
           if (grp.length < 2) continue;
-          var containerSel = iframeSelector + " >>> radio_group_" + gn;
+          // Use the iframe's own selector as container — ">>>" is invalid CSS.
+          var containerSel = iframeSelector + "__group_" + gn;
           if (seenContainers.has(containerSel)) continue;
           seenContainers.add(containerSel);
 
@@ -674,9 +681,14 @@
             }
             if (!lab) lab = grp[j].value || "";
 
+            // Iframe content isn't accessible via document.querySelector from
+            // the parent frame; store the best available id-based selector.
+            var iframeInputSel = grp[j].id
+              ? "#" + grp[j].id
+              : "input[name='" + gn + "'][value='" + grp[j].value + "']";
             opts.push(makeOption(
               lab,
-              iframeSelector + " >>> input[name='" + gn + "'][value='" + grp[j].value + "']",
+              iframeInputSel,
               grp[j].value,
               grp[j].checked,
               "radio"
@@ -752,11 +764,14 @@
     }
 
     if (type === "SELECT_ANSWERS") {
-      // Receive answers and select them
+      // Receive answers and select them — applyAnswers is async
       var answers = (message.payload || message).answers || [];
-      var applied = applyAnswers(answers);
-      sendResponse({ success: true, applied: applied });
-      return true;
+      applyAnswers(answers).then(function (applied) {
+        sendResponse({ success: true, applied: applied });
+      }).catch(function (err) {
+        sendResponse({ success: false, error: err.message, applied: [] });
+      });
+      return true; // keep channel open for async
     }
 
     return false;
@@ -771,7 +786,7 @@
    * @param {Array} answers
    * @returns {Array} Results of each application.
    */
-  function applyAnswers(answers) {
+  async function applyAnswers(answers) {
     var questions = detectQuestions();
     var qMap = {};
     for (var i = 0; i < questions.length; i++) {
@@ -822,13 +837,20 @@
 
         // Use the action-runner's dispatching if available, else click directly
         var runner = window.__BrowserAgentRunner;
+        var clickOk = false;
         if (runner && runner.executeAction) {
-          runner.executeAction({
-            action_type: "SELECT",
-            selector: opt.selector,
-            text: opt.text,
-            value: opt.value,
-          });
+          // executeAction returns a Promise — we must resolve it before
+          // recording success, otherwise we always report success prematurely.
+          var actionResult = null;
+          try {
+            actionResult = await runner.executeAction({
+              action_type: "SELECT",
+              selector: opt.selector,
+              text: opt.text,
+              value: opt.value,
+            });
+            clickOk = actionResult && actionResult.success !== false;
+          } catch (_e) { clickOk = false; }
         } else {
           el.click();
           if (el.tagName === "INPUT") {
@@ -836,9 +858,10 @@
             el.dispatchEvent(new Event("input", { bubbles: true }));
             el.dispatchEvent(new Event("change", { bubbles: true }));
           }
+          clickOk = true;
         }
 
-        clickResults.push({ index: optIdx, success: true, text: opt.text });
+        clickResults.push({ index: optIdx, success: clickOk, text: opt.text });
       }
 
       results.push({

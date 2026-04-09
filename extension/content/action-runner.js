@@ -297,7 +297,9 @@
       if (elType === "radio") {
         el.checked = true;
       } else {
-        el.checked = !el.checked; // toggle checkbox
+        // Always check (not toggle) — SELECT means "pick this option".
+        // Callers wanting to deselect should send an explicit DESELECT action.
+        el.checked = true;
       }
       el.dispatchEvent(new Event("input",  { bubbles: true }));
       el.dispatchEvent(new Event("change", { bubbles: true }));
@@ -603,7 +605,14 @@
     // Direct action types: CLICK, TYPE, SELECT, …
     var directActions = ["CLICK", "TYPE", "SELECT", "SCROLL", "EXTRACT", "WAIT", "NAVIGATE_NEXT", "SUBMIT"];
     if (directActions.indexOf(type) !== -1) {
-      var actionPayload = Object.assign({}, message.payload || message, { action_type: type });
+      // Build payload from message fields, but strip the 'type' key to avoid
+      // it bleeding into action fields, then force action_type to the correct value.
+      var base = message.payload || message;
+      var actionPayload = {};
+      for (var k in base) {
+        if (k !== "type") actionPayload[k] = base[k];
+      }
+      actionPayload.action_type = type;
       executeAction(actionPayload).then(function (result) {
         sendResponse(result);
       });

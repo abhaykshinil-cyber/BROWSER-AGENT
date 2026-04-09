@@ -91,11 +91,21 @@ async function checkHealth() {
       isServerOnline = true;
       broadcastToExtension({ type: SERVER_CONNECTED, payload: data });
       console.log("[BrowserAgent] Server online:", data.model);
+      // Only attempt WebSocket AFTER confirming server is up.
+      // This prevents ERR_CONNECTION_REFUSED console errors on cold start.
+      connectWebSocket();
     }
     return true;
   } catch (_) {
     if (isServerOnline) {
       isServerOnline = false;
+      // Server just went offline — close any open socket so reconnect stops
+      if (socket) {
+        socket.onclose = null; // prevent scheduleReconnect firing
+        socket.close();
+        socket = null;
+      }
+      reconnectCount = 0;
       broadcastToExtension({ type: SERVER_DISCONNECTED });
       console.warn("[BrowserAgent] Server offline");
     }
@@ -133,7 +143,8 @@ function connectWebSocket() {
 }
 
 function scheduleReconnect() {
-  if (reconnectCount >= MAX_RECONNECT) return;
+  // Don't reconnect if server is known offline — wait for health check to confirm it's back.
+  if (reconnectCount >= MAX_RECONNECT || !isServerOnline) return;
   reconnectCount++;
   clearTimeout(reconnectTimer);
   reconnectTimer = setTimeout(connectWebSocket, RECONNECT_MS * Math.min(reconnectCount, 5));
@@ -584,14 +595,12 @@ function sleep(ms) {
 chrome.runtime.onInstalled.addListener((details) => {
   console.log("[BrowserAgent] Installed:", details.reason);
   chrome.sidePanel.setOptions({ enabled: true });
-  checkHealth();
-  connectWebSocket();
+  checkHealth(); // connectWebSocket is called inside checkHealth when server is confirmed up
 });
 
 chrome.runtime.onStartup.addListener(() => {
   console.log("[BrowserAgent] Startup");
   checkHealth();
-  connectWebSocket();
 });
 
 chrome.runtime.onMessage.addListener(handleExtensionMessage);
@@ -603,9 +612,8 @@ chrome.action.onClicked.addListener(async (tab) => {
 // Periodic health check (every 15s) to detect server going online/offline
 setInterval(checkHealth, 15000);
 
-// Initial boot
+// Initial boot — connectWebSocket is triggered inside checkHealth when server is confirmed up
 checkHealth();
-connectWebSocket();
 
 // Phase 9: Watch tab changes and broadcast to UI
 watchTabChanges((event) => {

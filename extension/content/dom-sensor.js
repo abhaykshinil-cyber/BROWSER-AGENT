@@ -631,23 +631,10 @@
     };
   }
 
-  // ── Message Handler ──────────────────────────────────────────────
-
-  chrome.runtime.onMessage.addListener(function (message, _sender, sendResponse) {
-    if (message && message.type === "SCAN") {
-      try {
-        var result = buildScanResult();
-        sendResponse({ success: true, data: result });
-      } catch (err) {
-        sendResponse({ success: false, error: err.message });
-      }
-      return true; // keep channel open
-    }
-    // Let other listeners handle non-SCAN messages
-    return false;
-  });
-
   // ── Expose for sibling scripts ───────────────────────────────────
+  // NOTE: SCAN messages are handled by content.js (which augments the
+  // result with url/title before responding). dom-sensor exposes its
+  // API via window.__BrowserAgentSensor for content.js to call.
 
   window.__BrowserAgentSensor = {
     scanDOM:                  scanDOM,

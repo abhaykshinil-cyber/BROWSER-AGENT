@@ -174,12 +174,23 @@ export async function loadRules(filters = {}) {
     const qs = params.toString();
     if (qs) url += `?${qs}`;
 
-    const resp = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    // Quick 2 s timeout — if server isn't up yet this fails fast & silently
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2000);
+    let resp;
+    try {
+      resp = await fetch(url, { signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
     _rules = Array.isArray(data) ? data : data.rules || data.items || [];
   } catch (e) {
-    console.warn("[MemoryPanel] loadRules failed:", e.message);
+    // Suppress noise when the backend simply isn't running yet
+    if (e.name !== "AbortError" && !e.message?.includes("fetch")) {
+      console.warn("[MemoryPanel] loadRules failed:", e.message);
+    }
     _rules = [];
   }
 
@@ -387,14 +398,21 @@ function testRule(memoryId) {
 
 async function loadSiteProfiles() {
   try {
-    const resp = await fetch(`${_backendUrl}/memory/site-profiles`, {
-      signal: AbortSignal.timeout(5000),
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2000);
+    let resp;
+    try {
+      resp = await fetch(`${_backendUrl}/memory/site-profiles`, { signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
     _profiles = Array.isArray(data) ? data : data.profiles || [];
   } catch (e) {
-    console.warn("[MemoryPanel] loadSiteProfiles failed:", e.message);
+    if (e.name !== "AbortError" && !e.message?.includes("fetch")) {
+      console.warn("[MemoryPanel] loadSiteProfiles failed:", e.message);
+    }
     _profiles = [];
   }
 

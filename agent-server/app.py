@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -55,6 +55,18 @@ class RunState:
         self.steps_completed: int = 0
         self.started_at: Optional[str] = None
         self._cancel_event: asyncio.Event = asyncio.Event()
+        self.active_connections: dict[str, WebSocket] = {}
+
+    async def broadcast(self, message: dict[str, Any]) -> None:
+        """Send a JSON message to every connected WebSocket client."""
+        dead: list[str] = []
+        for conn_id, ws in self.active_connections.items():
+            try:
+                await ws.send_json(message)
+            except Exception:
+                dead.append(conn_id)
+        for conn_id in dead:
+            self.active_connections.pop(conn_id, None)
 
     def start(self, task_id: str, goal: str) -> None:
         self.running = True
@@ -148,12 +160,10 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"^(chrome-extension://.*|http://localhost(:\d+)?|http://127\.0\.0\.1(:\d+)?)$",
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"],
 )
 
 # ── Register Routers ─────────────────────────────────────────────────
@@ -224,11 +234,24 @@ async def start_run(body: RunRequest, request: Request):
     run_state: RunState = request.app.state.run_state
 
     if run_state.running:
-        raise HTTPException(
-            status_code=409,
-            detail=f"A task is already running (task_id={run_state.task_id}). "
-            f"POST /stop to cancel it first.",
-        )
+        # Auto-cancel stale tasks older than 5 minutes instead of blocking
+        stale = False
+        if run_state.started_at:
+            try:
+                from datetime import timedelta
+                started = datetime.fromisoformat(run_state.started_at)
+                if datetime.now(timezone.utc) - started > timedelta(minutes=5):
+                    stale = True
+            except Exception:
+                stale = True
+        if not stale:
+            raise HTTPException(
+                status_code=409,
+                detail=f"A task is already running (task_id={run_state.task_id}). "
+                f"POST /stop to cancel it first.",
+            )
+        logger.warning("Auto-cancelling stale task %s", run_state.task_id)
+        run_state.stop()
 
     task_id = uuid4().hex
     run_state.start(task_id, body.goal)
@@ -263,6 +286,90 @@ async def stop_run(request: Request):
         "task_id": old_id,
         "message": "Task cancelled.",
     }
+
+
+# ── WebSocket ─────────────────────────────────────────────────────────
+
+
+def _ws_envelope(msg_type: str, payload: Any, request_id: str | None = None) -> dict:
+    return {
+        "type": msg_type,
+        "payload": payload,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "request_id": request_id or uuid4().hex,
+    }
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """Persistent bidirectional channel between the Chrome extension and server.
+
+    The extension sends messages like PAGE_CONTEXT, TASK_START, STATUS_REQUEST.
+    The server responds with SERVER_CONNECTED, STATUS_RESPONSE, ERROR, etc.
+    """
+    await websocket.accept()
+    conn_id = uuid4().hex
+    run_state: RunState = websocket.app.state.run_state
+    run_state.active_connections[conn_id] = websocket
+
+    logger.info("WebSocket connected: %s (total: %d)", conn_id, len(run_state.active_connections))
+
+    try:
+        await websocket.send_json(
+            _ws_envelope("SERVER_CONNECTED", {"connection_id": conn_id})
+        )
+
+        import json as _json
+        while True:
+            try:
+                # 60-second idle timeout so stale connections don't leak memory.
+                raw = await asyncio.wait_for(websocket.receive_text(), timeout=60.0)
+            except asyncio.TimeoutError:
+                # Send a ping to check if client is still alive; if it fails
+                # the outer except WebSocketDisconnect will clean up.
+                try:
+                    await websocket.send_json(_ws_envelope("PING", {}))
+                except Exception:
+                    break
+                continue
+            try:
+                message = _json.loads(raw)
+            except _json.JSONDecodeError:
+                await websocket.send_json(_ws_envelope("ERROR", {"detail": "Invalid JSON"}))
+                continue
+
+            msg_type = message.get("type", "UNKNOWN")
+            payload  = message.get("payload", {})
+            req_id   = message.get("request_id")
+
+            logger.debug("WS [%s] from %s", msg_type, conn_id)
+
+            if msg_type == "STATUS_REQUEST":
+                await websocket.send_json(_ws_envelope(
+                    "STATUS_RESPONSE",
+                    {
+                        "executing": run_state.running,
+                        "task_id":   run_state.task_id,
+                        "model":     websocket.app.state.config.MODEL,
+                    },
+                    req_id,
+                ))
+            elif msg_type == "TASK_CANCEL":
+                run_state.stop()
+                await websocket.send_json(_ws_envelope("TASK_COMPLETE", {"cancelled": True}, req_id))
+            elif msg_type in ("PAGE_CONTEXT", "ACTION_RESULT", "TEACHING_SUBMIT", "AGENT_INIT"):
+                # Acknowledge — real processing happens via REST endpoints
+                await websocket.send_json(_ws_envelope("ACK", {"type": msg_type}, req_id))
+            else:
+                logger.debug("WS unhandled type: %s", msg_type)
+
+    except WebSocketDisconnect:
+        logger.info("WebSocket disconnected: %s", conn_id)
+    except Exception as exc:
+        logger.exception("WebSocket error on %s: %s", conn_id, exc)
+    finally:
+        run_state.active_connections.pop(conn_id, None)
+        logger.info("WS connections remaining: %d", len(run_state.active_connections))
 
 
 # ── CLI Entry Point ───────────────────────────────────────────────────
