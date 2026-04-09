@@ -30,7 +30,7 @@ import { initMemoryPanel } from "./memory-panel.js";
 
 let SETTINGS = {
   apiKey:      "",
-  model:       "claude-opus-4-5",
+  model:       "gemini-2.0-flash",
   delay:       800,
   previewMode: true,
   backendUrl:  "http://localhost:8765",
@@ -150,14 +150,14 @@ function registerSettingsListeners() {
   if (saveBtn) {
     saveBtn.addEventListener("click", async () => {
       const apiKey     = ($("#set-api-key")?.value || "").trim();
-      const model      = $("#set-model")?.value || "claude-opus-4-5";
+      const model      = $("#set-model")?.value || "gemini-2.0-flash";
       const delayVal   = parseInt($("#set-delay")?.value || "800", 10);
       const previewVal = !!$("#set-preview")?.checked;
       const backendVal = ($("#set-backend")?.value || "http://localhost:8765").trim();
 
-      // Validate API key
-      if (apiKey && !apiKey.startsWith("sk-ant-")) {
-        showToast("API key must start with sk-ant-", "error");
+      // Validate API key (Gemini keys start with AIza)
+      if (apiKey && !apiKey.startsWith("AIza")) {
+        showToast("API key must start with AIza", "error");
         return;
       }
 
@@ -265,19 +265,54 @@ async function handleScan() {
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tabs || !tabs.length) throw new Error("No active tab");
 
-    const response = await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error("Scan timed out")), 8000);
-      chrome.tabs.sendMessage(tabs[0].id, { type: "SCAN" }, (r) => {
+    const tab = tabs[0];
+
+    // Guard: can't inject into chrome:// or extension pages
+    if (!tab.url || tab.url.startsWith("chrome://") || tab.url.startsWith("chrome-extension://") || tab.url.startsWith("about:")) {
+      throw new Error("Cannot scan browser internal pages. Navigate to a normal website first.");
+    }
+
+    // Helper: try to send SCAN, returns response or null on connection error
+    const tryScan = () => new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(null), 6000);
+      chrome.tabs.sendMessage(tab.id, { type: "SCAN" }, (r) => {
         clearTimeout(timer);
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-        } else {
-          resolve(r);
-        }
+        if (chrome.runtime.lastError) resolve(null);
+        else resolve(r);
       });
     });
 
-    if (response && response.success && response.data) {
+    let response = await tryScan();
+
+    // If no response, content scripts may not be injected yet — inject them now
+    if (!response) {
+      appendLog("Content script not ready — injecting…", "info");
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: [
+            "content/annotation.js",
+            "content/dom-sensor.js",
+            "content/action-runner.js",
+            "content/mcq-detector.js",
+            "content/content.js",
+          ],
+        });
+        await chrome.scripting.insertCSS({
+          target: { tabId: tab.id },
+          files: ["content/content.css"],
+        }).catch(() => {});
+        // Small wait for scripts to initialise
+        await new Promise((r) => setTimeout(r, 500));
+        response = await tryScan();
+      } catch (injErr) {
+        throw new Error(`Could not inject content scripts: ${injErr.message}`);
+      }
+    }
+
+    if (!response) throw new Error("Content script did not respond after injection. Try refreshing the page.");
+
+    if (response.success && response.data) {
       const data = response.data;
       const questions = data.mcq_questions || data.questions || [];
       setState({ questions });
@@ -288,6 +323,8 @@ async function handleScan() {
         renderMCQPanel();
         switchTab("mcq");
         showToast(`${questions.length} question(s) detected`, "info");
+      } else {
+        showToast("Page scanned — no MCQ questions found", "info");
       }
     } else {
       appendLog("Scan returned no data", "warn");
@@ -305,7 +342,9 @@ async function handleScan() {
 async function handleRun() {
   const goal = ($("#prompt-input")?.value || "").trim();
   if (!goal) { showToast("Enter a goal first", "error"); return; }
-  if (!SETTINGS.apiKey) { showToast("Set your API key in Settings", "error"); return; }
+  // API key is optional here — the backend uses its own .env GEMINI_API_KEY.
+  // Only warn, don't block, so Pause/Stop buttons still get enabled.
+  if (!SETTINGS.apiKey) { showToast("⚠ No API key set — using server key", "warn"); }
 
   // If preview mode: call /plan first
   if (SETTINGS.previewMode) {
