@@ -138,7 +138,7 @@ async def lifespan(app: FastAPI):
     await db.connect()
     app.state.db = db
 
-    logger.info("BrowserAgent server ready ✓")
+    logger.info("BrowserAgent server ready [OK]")
 
     yield
 
